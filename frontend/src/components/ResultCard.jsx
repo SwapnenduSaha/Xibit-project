@@ -1,5 +1,6 @@
 import React from 'react';
 import ClinicMap from './ClinicMap';
+import NearbyClinics from './NearbyClinics';
 
 const SPECIALIST_ICONS = {
     neurologist: '🧠',
@@ -22,14 +23,6 @@ const ResultCard = ({ result, liveClinics, userPos, isFetchingClinics }) => {
 
     const icon = SPECIALIST_ICONS[result.specialist?.toLowerCase()] || '🏥';
 
-    const clinicsToDisplay = liveClinics && liveClinics.length > 0 ? liveClinics : result.clinics;
-    const isLive = liveClinics && liveClinics.length > 0;
-
-    const getNavUrl = (destLat, destLng) => {
-        if (!userPos) return `https://www.google.com/maps/search/?api=1&query=${destLat},${destLng}`;
-        return `https://www.google.com/maps/dir/?api=1&origin=${userPos.lat},${userPos.lng}&destination=${destLat},${destLng}`;
-    };
-
     return (
         <div className="result-card" id="result-section">
             <div className="result-header">
@@ -46,59 +39,23 @@ const ResultCard = ({ result, liveClinics, userPos, isFetchingClinics }) => {
             <div className="clinics-section">
                 <div className="clinics-header">
                     <div className="clinics-title">
-                        <span>📍</span> {isLive ? 'Real Nearby Clinics' : 'Nearby Sample Clinics'}
+                        <span>📍</span> Nearby Clinics
                     </div>
                     {isFetchingClinics ? (
                         <span className="clinics-count">Finding locations...</span>
                     ) : (
-                        clinicsToDisplay?.length > 0 && (
-                            <span className="clinics-count">{clinicsToDisplay.length} found</span>
+                        liveClinics?.length > 0 && (
+                            <span className="clinics-count">{liveClinics.length} found</span>
                         )
                     )}
                 </div>
 
-                {clinicsToDisplay && clinicsToDisplay.length > 0 ? (
+                {liveClinics && liveClinics.length > 0 ? (
                     <>
-                        <div className="clinic-list" style={{
-                            display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
-                            gap: '12px', marginBottom: '1.5rem'
-                        }}>
-                            {clinicsToDisplay.map((clinic, i) => (
-                                <div className="clinic-item" key={i} style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-                                    <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '10px' }}>
-                                        <div className="clinic-left">
-                                            <div className="clinic-name" style={{ fontSize: '1.1rem', fontWeight: 'bold' }}>{clinic.name}</div>
-                                            <div className="clinic-specialist" style={{ opacity: 0.8 }}>{clinic.type || clinic.specialist}</div>
-                                        </div>
-                                        {clinic.distance && (
-                                            <div style={{ textAlign: 'right' }}>
-                                                <div style={{ color: '#6ee7b7', fontWeight: '800', fontSize: '1.1rem' }}>
-                                                    {clinic.distance.toFixed(1)} <span style={{ fontSize: '0.7rem' }}>km</span>
-                                                </div>
-                                                <div style={{ fontSize: '0.65rem', color: 'var(--color-muted)' }}>distance left</div>
-                                            </div>
-                                        )}
-                                    </div>
-
-                                    <a
-                                        href={getNavUrl(clinic.lat, clinic.lng)}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="btn-search"
-                                        style={{
-                                            marginTop: 'auto', textAlign: 'center', justifyContent: 'center',
-                                            padding: '10px', fontSize: '0.85rem', background: 'rgba(79, 156, 249, 0.15)',
-                                            border: '1px solid var(--color-primary)', color: 'var(--color-primary)'
-                                        }}
-                                    >
-                                        🚀 Navigate Now
-                                    </a>
-                                </div>
-                            ))}
-                        </div>
+                        <NearbyClinics clinics={liveClinics} userPos={userPos} />
 
                         <ClinicMap
-                            clinics={clinicsToDisplay}
+                            clinics={liveClinics}
                             specialist={result.specialist}
                             userPos={userPos}
                         />
