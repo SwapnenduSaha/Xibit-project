@@ -13,45 +13,56 @@ function App() {
   const [isFetchingClinics, setIsFetchingClinics] = useState(false);
 
   // Specialist to Overpass Query Map
-  const radius = import.meta.env.VITE_SEARCH_RADIUS || 10000;
+  const radius = import.meta.env.VITE_SEARCH_RADIUS || 5000;
   
   const SPECIALIST_TO_QUERY = {
-    neurologist: `node["healthcare"="doctor"]["healthcare:speciality"="neurology"](around:${radius},LAT,LNG);`,
-    cardiologist: `node["healthcare"="doctor"]["healthcare:speciality"="cardiology"](around:${radius},LAT,LNG);`,
-    dermatologist: `node["healthcare"="doctor"]["healthcare:speciality"="dermatology"](around:${radius},LAT,LNG);`,
-    gastroenterologist: `node["healthcare"="doctor"]["healthcare:speciality"="gastroenterology"](around:${radius},LAT,LNG);`,
-    'general physician': `node["amenity"~"clinic|doctors"](around:${radius},LAT,LNG);`,
-    dentist: `node["amenity"="dentist"](around:${radius},LAT,LNG);`,
-    ophthalmologist: `node["healthcare"="doctor"]["healthcare:speciality"="ophthalmology"](around:${radius},LAT,LNG);`,
-    orthopedist: `node["healthcare"="doctor"]["healthcare:speciality"~"orthopaedics|orthopedics"](around:${radius},LAT,LNG);`,
-    physiotherapist: `node["healthcare"="physiotherapist"](around:${radius},LAT,LNG);`,
-    psychiatrist: `node["healthcare"="doctor"]["healthcare:speciality"="psychiatry"](around:${radius},LAT,LNG);`,
-    pulmonologist: `node["healthcare"="doctor"]["healthcare:speciality"~"pulmonology|pneumology"](around:${radius},LAT,LNG);`,
-    ent: `node["healthcare"="doctor"]["healthcare:speciality"~"otolaryngology|ent"](around:${radius},LAT,LNG);`,
-    gynecologist: `node["healthcare"="doctor"]["healthcare:speciality"~"gynaecology|gynecology"](around:${radius},LAT,LNG);`,
+    neurologist: `node["healthcare"="doctor"]["healthcare:speciality"="neurology"](around:${radius},LAT,LNG); node["amenity"~"hospital|clinic"](around:${radius},LAT,LNG);`,
+    cardiologist: `node["healthcare"="doctor"]["healthcare:speciality"="cardiology"](around:${radius},LAT,LNG); node["amenity"~"hospital|clinic"](around:${radius},LAT,LNG);`,
+    dermatologist: `node["healthcare"="doctor"]["healthcare:speciality"="dermatology"](around:${radius},LAT,LNG); node["amenity"~"clinic"](around:${radius},LAT,LNG);`,
+    gastroenterologist: `node["healthcare"="doctor"]["healthcare:speciality"="gastroenterology"](around:${radius},LAT,LNG); node["amenity"~"hospital|clinic"](around:${radius},LAT,LNG);`,
+    'general physician': `node["amenity"~"clinic|doctors"](around:${radius},LAT,LNG); node["amenity"="hospital"](around:${radius},LAT,LNG);`,
+    dentist: `node["amenity"="dentist"](around:${radius},LAT,LNG); node["healthcare"="dentist"](around:${radius},LAT,LNG);`,
+    ophthalmologist: `node["healthcare"="doctor"]["healthcare:speciality"="ophthalmology"](around:${radius},LAT,LNG); node["amenity"~"clinic"](around:${radius},LAT,LNG);`,
+    orthopedist: `node["healthcare"="doctor"]["healthcare:speciality"~"orthopaedics|orthopedics"](around:${radius},LAT,LNG); node["amenity"="hospital"](around:${radius},LAT,LNG);`,
+    physiotherapist: `node["healthcare"="physiotherapist"](around:${radius},LAT,LNG); node["amenity"="clinic"](around:${radius},LAT,LNG);`,
+    psychiatrist: `node["healthcare"="doctor"]["healthcare:speciality"="psychiatry"](around:${radius},LAT,LNG); node["amenity"="hospital"](around:${radius},LAT,LNG);`,
+    pulmonologist: `node["healthcare"="doctor"]["healthcare:speciality"~"pulmonology|pneumology"](around:${radius},LAT,LNG); node["amenity"="hospital"](around:${radius},LAT,LNG);`,
+    ent: `node["healthcare"="doctor"]["healthcare:speciality"~"otolaryngology|ent"](around:${radius},LAT,LNG); node["amenity"~"hospital|clinic"](around:${radius},LAT,LNG);`,
+    gynecologist: `node["healthcare"="doctor"]["healthcare:speciality"~"gynaecology|gynecology"](around:${radius},LAT,LNG); node["amenity"~"hospital|clinic"](around:${radius},LAT,LNG);`,
   };
 
   const fetchLiveClinics = async (specialist, lat, lng) => {
     setIsFetchingClinics(true);
     const key = specialist?.toLowerCase();
     const queryTemplate = SPECIALIST_TO_QUERY[key] || `node["amenity"~"hospital|clinic|doctors"](around:${radius},LAT,LNG);`;
-    const nodeQuery = queryTemplate.replace(/LAT/g, lat).replace(/LNG/g, lng);
-    const overpassQuery = `[out:json][timeout:25];\n(\n  ${nodeQuery}\n);\nout body;`;
-    const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
-
-    try {
+    
+    const fetchEntities = async (template, isFallback = false) => {
+      const nodeQuery = template.replace(/LAT/g, lat).replace(/LNG/g, lng);
+      const overpassQuery = `[out:json][timeout:25];\n(\n  ${nodeQuery}\n);\nout body;`;
+      const url = `https://overpass-api.de/api/interpreter?data=${encodeURIComponent(overpassQuery)}`;
       const response = await fetch(url);
       const data = await response.json();
-      const results = (data.elements || [])
+      return (data.elements || [])
         .filter((el) => el.lat && el.lon)
         .map((el) => ({
           name: el.tags?.name || el.tags?.['name:en'] || 'Nearby Medical Center',
           lat: el.lat,
           lng: el.lon,
-          type: el.tags?.amenity || el.tags?.healthcare || '',
+          type: isFallback ? 'Hospital' : (el.tags?.amenity || el.tags?.healthcare || ''),
           distance: getDistance(lat, lng, el.lat, el.lon)
         }))
         .sort((a, b) => a.distance - b.distance);
+    };
+
+    try {
+      let results = await fetchEntities(queryTemplate, false);
+      
+      if (results.length === 0) {
+        console.warn("No specific clinics found, falling back to nearest hospitals...");
+        const fallbackTemplate = `node["amenity"="hospital"](around:${radius},LAT,LNG);`;
+        results = await fetchEntities(fallbackTemplate, true);
+      }
+      
       setLiveClinics(results);
     } catch (err) {
       console.error("Overpass fetch failed", err);
@@ -109,9 +120,17 @@ function App() {
               setUserPos({ lat: latitude, lng: longitude });
               fetchLiveClinics(data.specialist, latitude, longitude);
             },
-            () => console.log("Location access denied"),
+            () => {
+              console.warn("Location access denied or timed out, using fallback");
+              setUserPos({ lat: 22.57, lng: 88.36 });
+              fetchLiveClinics(data.specialist, 22.57, 88.36);
+            },
             { timeout: 5000 }
           );
+        } else {
+          console.warn("Geolocation not supported by this browser, using fallback");
+          setUserPos({ lat: 22.57, lng: 88.36 });
+          fetchLiveClinics(data.specialist, 22.57, 88.36);
         }
 
         setTimeout(() => {
